@@ -1,0 +1,59 @@
+---
+- name: Установка и настройка Nginx с копированием HTML с локального компьютера
+  hosts: all
+  become: yes
+
+  vars:
+    # Укажите путь к локальному файлу index.html
+    local_source_index_path: /home/ubuntu/.ssh/server/site/index.html
+    remote_dest_index_path: /var/www/html/index.html
+
+  tasks:
+    - name: Обновление кеша пакетов APT
+      apt:
+        update_cache: yes
+
+    - name: Установка Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Убедиться, что Nginx запущен и включен в автозагрузку
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Проверить, существует ли локальный файл index.html
+      stat:
+        path: "{{ local_source_index_path }}"
+      delegate_to: localhost
+      register: local_index_file_stat
+
+    - name: Отладка. Проверить информацию о локальном файле
+      debug:
+        msg:
+          - "Файл существует: {{ local_index_file_stat.stat.exists }}"
+          - "Локальный путь к файлу: {{ local_source_index_path }}"
+
+    - name: Копирование локального файла index.html на сервер
+      copy:
+        src: "{{ local_source_index_path }}"
+        dest: "{{ remote_dest_index_path }}"
+        owner: www-data
+        group: www-data
+        mode: '0644'
+      when: local_index_file_stat.stat.exists
+
+    - name: Убедиться, что директория /var/www/html доступна для Nginx
+      file:
+        path: /var/www/html
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Перезапуск Nginx для применения изменений
+      service:
+        name: nginx
+        state: restarted
